@@ -2,7 +2,8 @@
 
 A modern, production-grade, full-stack **Smart Gym Operations & AI Wellness Platform** developed as an MCA-level project. Built using the modern MERN-style architecture but modernized with **PostgreSQL & Prisma ORM** instead of MongoDB & Mongoose, paired with **Clerk Authentication** and **Groq Cloud AI**.
 
----
+--- 
+## modules
 
 ## 1. Project Overview
 
