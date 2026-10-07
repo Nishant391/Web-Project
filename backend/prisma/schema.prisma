@@ -1,0 +1,257 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  TRAINER
+  MEMBER
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  clerkUserId String   @unique
+  email       String   @unique
+  name        String
+  role        Role     @default(MEMBER)
+  member      Member?
+  trainer     Trainer?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([clerkUserId])
+  @@index([email])
+  @@index([role])
+}
+
+model Member {
+  id                  Int                 @id @default(autoincrement())
+  clerkUserId         String?             @unique
+  userId              Int?                @unique
+  user                User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  email               String              @unique
+  phone               String?
+  dateOfBirth         DateTime?
+  gender              String?
+  emergencyContact    String?
+  address             String?
+  status              String              @default("ACTIVE")
+  joinDate            DateTime            @default(now())
+  trainerId           Int?
+  membershipId        Int?
+  trainer             Trainer?            @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  membership          Membership?         @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  attendances         Attendance[]
+  payments            Payment[]
+  workouts            Workout[]
+  workoutAssignments WorkoutAssignment[]
+  workoutCompletions WorkoutCompletion[]
+  nutritionLogs       NutritionLog[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([trainerId])
+}
+
+model Trainer {
+  id              Int             @id @default(autoincrement())
+  clerkUserId     String?         @unique
+  userId          Int?            @unique
+  user            User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  email           String          @unique
+  phone           String?
+  specialization  String
+  experienceYears Int             @default(1)
+  bio             String?
+  status          String          @default("ACTIVE")
+  members         Member[]
+  workouts        Workout[]
+  salaries        TrainerSalary[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([email])
+  @@index([specialization])
+}
+
+model TrainerSalary {
+  id          Int       @id @default(autoincrement())
+  trainerId   Int
+  trainer     Trainer   @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  amount      Float
+  month       String // e.g. "October 2026"
+  paymentDate DateTime?
+  status      String    @default("PENDING") // "PAID", "PENDING", "OVERDUE"
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([trainerId])
+  @@index([status])
+}
+
+model Membership {
+  id             Int       @id @default(autoincrement())
+  name           String
+  description    String?
+  price          Float
+  durationInDays Int
+  features       String
+  status         String    @default("ACTIVE")
+  members        Member[]
+  payments       Payment[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+}
+
+model Attendance {
+  id           Int       @id @default(autoincrement())
+  memberId     Int
+  member       Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  checkInTime  DateTime  @default(now())
+  checkOutTime DateTime?
+  date         DateTime  @default(now())
+  status       String    @default("PRESENT")
+  createdAt    DateTime  @default(now())
+
+  @@index([memberId])
+  @@index([date])
+}
+
+model Payment {
+  id            Int         @id @default(autoincrement())
+  memberId      Int
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  membershipId  Int?
+  membership    Membership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  amount        Float
+  paymentDate   DateTime    @default(now())
+  paymentMethod String
+  status        String      @default("COMPLETED")
+  invoiceNumber String      @unique
+  notes         String?
+  createdAt     DateTime    @default(now())
+
+  @@index([memberId])
+  @@index([status])
+}
+
+model Workout {
+  id              Int                 @id @default(autoincrement())
+  title           String
+  splitType       String?             @default("CUSTOM") // "PUSH", "PULL", "LEGS", "UPPER", "LOWER", "FULL_BODY", "CUSTOM"
+  description     String?
+  targetGoal      String?
+  difficultyLevel String              @default("INTERMEDIATE")
+  memberId        Int?
+  member          Member?             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  trainerId       Int?
+  trainer         Trainer?            @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  exercises       WorkoutExercise[]
+  assignments     WorkoutAssignment[]
+  completions     WorkoutCompletion[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([memberId])
+  @@index([trainerId])
+}
+
+model WorkoutExercise {
+  id          Int                 @id @default(autoincrement())
+  workoutId   Int
+  workout     Workout             @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exerciseName String
+  sets        Int
+  reps        String
+  weight      String?
+  restSeconds Int                 @default(60)
+  dayOfWeek   String? // "Day 1 - Push", "Monday", etc.
+  notes       String?
+  completions WorkoutCompletion[]
+  createdAt   DateTime            @default(now())
+
+  @@index([workoutId])
+}
+
+model WorkoutAssignment {
+  id                   Int      @id @default(autoincrement())
+  workoutId            Int
+  workout              Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  memberId             Int
+  member               Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  assignedByTrainerId  Int?
+  startDate            DateTime @default(now())
+  status               String   @default("ACTIVE") // "ACTIVE", "COMPLETED", "ARCHIVED"
+  createdAt            DateTime @default(now())
+
+  @@index([memberId])
+  @@index([workoutId])
+}
+
+model WorkoutCompletion {
+  id              Int              @id @default(autoincrement())
+  workoutId       Int?
+  workout         Workout?         @relation(fields: [workoutId], references: [id], onDelete: SetNull)
+  exerciseId      Int?
+  exercise        WorkoutExercise? @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
+  memberId        Int
+  member          Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  completedDate   DateTime         @default(now())
+  notes           String?
+  durationMinutes Int?
+  status          String           @default("COMPLETED")
+  createdAt       DateTime         @default(now())
+
+  @@index([memberId])
+  @@index([completedDate])
+}
+
+model NutritionLog {
+  id        Int      @id @default(autoincrement())
+  memberId  Int
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  mealType  String // "BREAKFAST", "LUNCH", "SNACK", "DINNER"
+  foodName  String
+  calories  Int
+  protein   Float?
+  carbs     Float?
+  fats      Float?
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([memberId])
+  @@index([date])
+}
+
+model Equipment {
+  id                  Int       @id @default(autoincrement())
+  name                String
+  category            String
+  quantity            Int       @default(1)
+  condition           String    @default("EXCELLENT")
+  status              String    @default("AVAILABLE")
+  purchaseDate        DateTime?
+  lastMaintenanceDate DateTime?
+  nextMaintenanceDate DateTime?
+  location            String?
+  cost                Float?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@index([condition])
+}
