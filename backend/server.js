@@ -55,6 +55,27 @@ if (hasValidClerkKeys) {
   console.log('Running in Demo Auth Mode (role-based header authentication).');
 }
 
+// Root endpoint for Render health checks and welcome
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'PulseForge Smart Gym Management API is running',
+    healthCheck: '/api/health',
+    docs: 'All API endpoints are prefixed with /api/',
+    version: '2.0.0',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.head('/', (req, res) => {
+  res.status(200).end();
+});
+
+// Favicon handler to suppress 404 warnings
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
+});
+
 // System Health Check
 app.get('/api/health', (req, res) => {
   res.json({
