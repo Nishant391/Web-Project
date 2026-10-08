@@ -45,7 +45,10 @@ export function AttendanceHeatmap({
     const tempDate = new Date(startDate);
 
     while (tempDate <= today || currentWeek.length > 0) {
-      const dateStr = tempDate.toISOString().split('T')[0];
+      const year = tempDate.getFullYear();
+      const m = String(tempDate.getMonth() + 1).padStart(2, '0');
+      const d = String(tempDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${m}-${d}`;
       const count = heatmapData[dateStr] || 0;
       const dayOfWeek = tempDate.getDay();
       const currentMonth = tempDate.getMonth();

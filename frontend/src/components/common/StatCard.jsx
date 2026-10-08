@@ -5,12 +5,26 @@ export function StatCard({
   title,
   value,
   subtitle,
+  description,
   icon: Icon,
   trend,
   trendType = 'positive', // 'positive' | 'negative' | 'neutral'
   badge,
   className = '',
 }) {
+  const effectiveSubtitle = subtitle || description;
+
+  // Handle both trend as object { value: 12, isPositive: true } or trend as string
+  let trendText = null;
+  let isPositive = trendType === 'positive';
+
+  if (trend && typeof trend === 'object') {
+    isPositive = trend.isPositive !== false;
+    trendText = `${isPositive ? '+' : '-'}${trend.value}%`;
+  } else if (typeof trend === 'string' || typeof trend === 'number') {
+    trendText = String(trend);
+  }
+
   return (
     <motion.div
       whileHover={{ y: -3 }}
@@ -27,7 +41,9 @@ export function StatCard({
       </div>
 
       <div className="mt-4 flex items-baseline gap-2">
-        <h3 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">{value}</h3>
+        <h3 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+          {value !== undefined && value !== null ? value : 0}
+        </h3>
         {badge && (
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
             {badge}
@@ -35,22 +51,18 @@ export function StatCard({
         )}
       </div>
 
-      {(trend || subtitle) && (
+      {(trendText || effectiveSubtitle) && (
         <div className="mt-2 flex items-center gap-1.5 text-xs">
-          {trend && (
+          {trendText && (
             <span
               className={`font-semibold ${
-                trendType === 'positive'
-                  ? 'text-emerald-600'
-                  : trendType === 'negative'
-                  ? 'text-rose-600'
-                  : 'text-slate-600'
+                isPositive ? 'text-emerald-600' : 'text-rose-600'
               }`}
             >
-              {trend}
+              {trendText}
             </span>
           )}
-          {subtitle && <span className="text-slate-500">{subtitle}</span>}
+          {effectiveSubtitle && <span className="text-slate-500">{effectiveSubtitle}</span>}
         </div>
       )}
     </motion.div>

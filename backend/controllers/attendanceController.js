@@ -1,5 +1,26 @@
 const prisma = require('../config/prisma');
 
+/**
+ * Returns precise local day boundaries for accurate ongoing time queries
+ */
+function getDayBounds(dateInput = new Date()) {
+  const d = new Date(dateInput);
+  const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  return { startOfDay, endOfDay };
+}
+
+/**
+ * Returns formatted YYYY-MM-DD key based on local ongoing calendar date
+ */
+function toLocalDateKey(dateObj) {
+  const d = new Date(dateObj);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // GET /api/attendance - List attendance records with role authorization
 async function getAllAttendance(req, res, next) {
   try {
@@ -29,9 +50,7 @@ async function getAllAttendance(req, res, next) {
     }
 
     if (date) {
-      const targetDate = new Date(date);
-      const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
-      const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+      const { startOfDay, endOfDay } = getDayBounds(date);
       where.checkInTime = { gte: startOfDay, lte: endOfDay };
     }
 
@@ -66,8 +85,7 @@ async function getAllAttendance(req, res, next) {
 async function getAttendanceStats(req, res, next) {
   try {
     const userRole = req.user.role;
-    const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
-    const endOfToday = new Date(new Date().setHours(23, 59, 59, 999));
+    const { startOfDay: startOfToday, endOfDay: endOfToday } = getDayBounds();
 
     // A. Member-specific Heatmap & Streak Stats
     if (userRole === 'MEMBER') {
@@ -87,12 +105,12 @@ async function getAttendanceStats(req, res, next) {
         orderBy: { checkInTime: 'asc' },
       });
 
-      // Aggregate into calendar days map: { "YYYY-MM-DD": count }
+      // Aggregate into calendar days map: { "YYYY-MM-DD": count } using local date
       const heatmapMap = {};
       const uniqueDaysSet = new Set();
 
       records.forEach((r) => {
-        const dateKey = r.checkInTime.toISOString().split('T')[0];
+        const dateKey = toLocalDateKey(r.checkInTime);
         heatmapMap[dateKey] = (heatmapMap[dateKey] || 0) + 1;
         uniqueDaysSet.add(dateKey);
       });
@@ -103,14 +121,12 @@ async function getAttendanceStats(req, res, next) {
       const now = new Date();
       const currentDay = now.getDay(); // 0 is Sun
       const distanceToMonday = (currentDay + 6) % 7;
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - distanceToMonday);
-      startOfWeek.setHours(0, 0, 0, 0);
+      const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday, 0, 0, 0, 0);
 
       const visitsThisWeek = records.filter((r) => new Date(r.checkInTime) >= startOfWeek).length;
 
       // Calculate Visits this month
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       const visitsThisMonth = records.filter((r) => new Date(r.checkInTime) >= startOfMonth).length;
 
       // Calculate Current Streak and Longest Streak
@@ -120,15 +136,19 @@ async function getAttendanceStats(req, res, next) {
       let tempStreak = 0;
 
       // Check current streak backwards from today or yesterday
-      const todayStr = now.toISOString().split('T')[0];
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const todayStr = toLocalDateKey(now);
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      const yesterdayStr = toLocalDateKey(yesterday);
 
-      let streakCursor = uniqueDaysSet.has(todayStr) ? new Date(now) : (uniqueDaysSet.has(yesterdayStr) ? new Date(yesterday) : null);
+      let streakCursor = uniqueDaysSet.has(todayStr)
+        ? new Date(now)
+        : uniqueDaysSet.has(yesterdayStr)
+        ? new Date(yesterday)
+        : null;
+
       if (streakCursor) {
         while (true) {
-          const key = streakCursor.toISOString().split('T')[0];
+          const key = toLocalDateKey(streakCursor);
           if (uniqueDaysSet.has(key)) {
             currentStreak++;
             streakCursor.setDate(streakCursor.getDate() - 1);
@@ -149,14 +169,15 @@ async function getAttendanceStats(req, res, next) {
           if (diffDays === 1) {
             tempStreak++;
           } else {
+            longestStreak = Math.max(longestStreak, tempStreak);
             tempStreak = 1;
           }
         }
-        if (tempStreak > longestStreak) longestStreak = tempStreak;
       }
+      longestStreak = Math.max(longestStreak, tempStreak);
 
-      // Attendance percentage over past 90 days (expected goal: ~4 sessions/wk = 50-60%)
-      const percentage = Math.min(100, Math.round((uniqueDaysSet.size / 90) * 100 * 1.5));
+      const daysEnrolled = 30;
+      const percentage = Math.min(100, Math.round((visitsThisMonth / Math.max(1, daysEnrolled)) * 100));
 
       return res.json({
         success: true,
@@ -253,7 +274,7 @@ async function checkIn(req, res, next) {
     }
 
     // Check if member already checked in today without checking out
-    const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
+    const { startOfDay: startOfToday } = getDayBounds();
     const activeCheckIn = await prisma.attendance.findFirst({
       where: {
         memberId: targetMemberId,
@@ -270,11 +291,12 @@ async function checkIn(req, res, next) {
       });
     }
 
+    const now = new Date();
     const newAttendance = await prisma.attendance.create({
       data: {
         memberId: targetMemberId,
-        checkInTime: new Date(),
-        date: new Date(),
+        checkInTime: now,
+        date: now,
         status: 'PRESENT',
       },
       include: {
@@ -284,7 +306,7 @@ async function checkIn(req, res, next) {
 
     res.status(201).json({
       success: true,
-      message: 'Check-in verified successfully. Have a great workout!',
+      message: 'Check-in verified successfully at ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       data: newAttendance,
     });
   } catch (error) {
@@ -308,7 +330,7 @@ async function checkOut(req, res, next) {
       targetMemberId = parseInt(memberId, 10);
     }
 
-    const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
+    const { startOfDay: startOfToday } = getDayBounds();
     const activeSession = await prisma.attendance.findFirst({
       where: {
         memberId: targetMemberId,
@@ -325,16 +347,17 @@ async function checkOut(req, res, next) {
       });
     }
 
+    const now = new Date();
     const updated = await prisma.attendance.update({
       where: { id: activeSession.id },
       data: {
-        checkOutTime: new Date(),
+        checkOutTime: now,
       },
     });
 
     res.json({
       success: true,
-      message: 'Check-out completed. Workout session saved!',
+      message: 'Check-out completed at ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '. Session saved!',
       data: updated,
     });
   } catch (error) {

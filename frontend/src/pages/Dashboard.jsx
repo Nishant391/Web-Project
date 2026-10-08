@@ -38,6 +38,7 @@ import { Button } from '../components/ui/Button';
 import { AttendanceHeatmap } from '../components/common/AttendanceHeatmap';
 import { WorkoutSplitTracker } from '../components/common/WorkoutSplitTracker';
 import { AIFitnessHub } from '../components/common/AIFitnessHub';
+import { LiveClock } from '../components/common/LiveClock';
 
 export default function Dashboard() {
   const { role, user, isAdmin, isTrainer, isMember } = useAuth();
@@ -97,11 +98,11 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) {
+  if (loading || !data) {
     return <LoadingSpinner text="Retrieving live gym analytics and personalized profile..." />;
   }
 
-  if (error || !data) {
+  if (error) {
     return (
       <div className="rounded-2xl border border-rose-200 bg-rose-50/50 p-6 text-center">
         <p className="text-sm font-semibold text-rose-700">Backend connection notice</p>
@@ -119,7 +120,10 @@ export default function Dashboard() {
   // 1. MEMBER PERSONALIZED DASHBOARD VIEW
   // ========================================================
   if (role === 'MEMBER') {
-    const member = data.member;
+    if (!data.member) {
+      return <LoadingSpinner text="Retrieving member workouts & progress..." />;
+    }
+    const member = data.member || {};
     const attendanceStats = data.attendanceStats || {};
     const workouts = member?.workouts || [];
     const completions = member?.workoutCompletions || [];
@@ -147,8 +151,9 @@ export default function Dashboard() {
               </p>
             </div>
 
-            {/* Attendance Check-in action button */}
+            {/* Live Clock & Attendance Check-in action button */}
             <div className="flex flex-col sm:flex-row items-center gap-3">
+              <LiveClock variant="banner" />
               {activeSession ? (
                 <Button
                   size="sm"
@@ -295,7 +300,10 @@ export default function Dashboard() {
   // 2. TRAINER DASHBOARD VIEW
   // ========================================================
   if (role === 'TRAINER') {
-    const trainer = data.trainer;
+    if (!data.trainer && !data.summary) {
+      return <LoadingSpinner text="Retrieving coach operations hub..." />;
+    }
+    const trainer = data.trainer || {};
     const summary = data.summary || {};
     const assignedMembers = data.assignedMembers || [];
     const workouts = data.workouts || [];
@@ -304,18 +312,23 @@ export default function Dashboard() {
       <div className="space-y-8">
         {/* Trainer Banner */}
         <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 text-white shadow-soft sm:p-8">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">
-              Coach Operations Hub
-            </span>
+          <div className="relative z-10 flex flex-col justify-between gap-6 md:flex-row md:items-center">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">
+                  Coach Operations Hub
+                </span>
+              </div>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                Coach {trainer?.name || user?.name}
+              </h1>
+              <p className="mt-1 text-xs text-slate-300">
+                Specialization: <strong className="text-white">{trainer?.specialization}</strong> • Experience: <strong className="text-white">{trainer?.experienceYears} Years</strong>
+              </p>
+            </div>
+            <LiveClock variant="banner" />
           </div>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-            Coach {trainer?.name || user?.name}
-          </h1>
-          <p className="mt-1 text-xs text-slate-300">
-            Specialization: <strong className="text-white">{trainer?.specialization}</strong> • Experience: <strong className="text-white">{trainer?.experienceYears} Years</strong>
-          </p>
         </div>
 
         {/* Trainer Metrics Ribbon */}
@@ -445,14 +458,15 @@ export default function Dashboard() {
   // ========================================================
   // 3. ADMIN GYM-WIDE DASHBOARD VIEW
   // ========================================================
-  const {
-    summary,
-    monthlyRevenueData,
-    attendanceTrendData,
-    recentAttendance,
-    recentPayments,
-    recentTrainerSalaries,
-  } = data;
+  if (!data?.summary) {
+    return <LoadingSpinner text="Retrieving gym overview & analytics..." />;
+  }
+
+  const summary = data?.summary || {};
+  const monthlyRevenueData = data?.monthlyRevenueData || [];
+  const attendanceTrendData = data?.attendanceTrendData || [];
+  const recentAttendance = data?.recentAttendance || [];
+  const recentPayments = data?.recentPayments || [];
 
   return (
     <div className="space-y-8">
@@ -474,7 +488,8 @@ export default function Dashboard() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <LiveClock variant="banner" />
             <Link to="/members">
               <Button size="sm" className="bg-brand-600 hover:bg-brand-700 text-white text-xs">
                 <Plus size={14} /> Register Member

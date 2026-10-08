@@ -50,6 +50,7 @@ apiClient.interceptors.response.use(
 export const authApi = {
   getMe: () => apiClient.get('/auth/me'),
   setupRole: (data) => apiClient.post('/auth/setup-role', data),
+  switchRole: (role) => apiClient.post('/auth/switch-role', { role }),
 };
 
 // Dashboard APIs
@@ -128,7 +129,14 @@ export const equipmentApi = {
 // AI Features APIs (Strictly structured JSON via backend Groq)
 export const aiApi = {
   getDailyPlan: (data) => apiClient.post('/ai/daily-plan', data),
-  askAssistant: (data) => apiClient.post('/ai/assistant', data),
+  generateWorkout: (data) => apiClient.post('/ai/workout', data),
+  generateMealPlan: (data) => apiClient.post('/ai/meal-plan', data),
+  askAssistant: (data) =>
+    apiClient.post('/ai/assistant', {
+      message: data.message || data.question,
+      question: data.question || data.message,
+      history: data.history || [],
+    }),
   logNutrition: (data) => apiClient.post('/ai/nutrition', data),
   getNutrition: (params) => apiClient.get('/ai/nutrition', { params }),
 };

@@ -21,10 +21,55 @@ async function getDailyPlan(req, res, next) {
   }
 }
 
+// POST /api/ai/workout - Specialized workout routine generator (Markdown format)
+async function generateWorkout(req, res, next) {
+  try {
+    const { fitnessLevel, goal, daysPerWeek, targetArea, equipmentAvailable } = req.body;
+
+    const data = await groqService.generateWorkoutRoutine({
+      fitnessLevel: fitnessLevel || 'Intermediate',
+      goal: goal || 'Muscle Hypertrophy',
+      daysPerWeek: daysPerWeek ? parseInt(daysPerWeek, 10) : 4,
+      targetArea: targetArea || 'Full Body',
+      equipmentAvailable: equipmentAvailable || 'Commercial Gym',
+    });
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// POST /api/ai/meal-plan - Specialized meal plan generator (Markdown format)
+async function generateMealPlan(req, res, next) {
+  try {
+    const { dietPreference, dailyCalories, goal, mealsCount, restrictions } = req.body;
+
+    const data = await groqService.generateMealPlanArchitecture({
+      dietPreference: dietPreference || 'Balanced High-Protein',
+      dailyCalories: dailyCalories ? parseInt(dailyCalories, 10) : 2200,
+      goal: goal || 'Lean Muscle Maintenance',
+      mealsCount: mealsCount ? parseInt(mealsCount, 10) : 4,
+      restrictions: restrictions || 'None',
+    });
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // POST /api/ai/assistant - Conversational AI Assistant
 async function chatAssistant(req, res, next) {
   try {
-    const { message, history } = req.body;
+    const message = req.body.message || req.body.question || req.body.prompt || req.body.query;
+    const history = req.body.history || [];
 
     if (!message || typeof message !== 'string') {
       return res.status(400).json({
@@ -35,7 +80,7 @@ async function chatAssistant(req, res, next) {
 
     const data = await groqService.chatWithAssistant({
       message,
-      history: history || [],
+      history,
     });
 
     res.json({
@@ -107,8 +152,9 @@ async function getNutritionLogs(req, res, next) {
       targetMemberId = req.query.memberId ? parseInt(req.query.memberId, 10) : req.user.memberId;
     }
 
-    const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
-    const endOfToday = new Date(new Date().setHours(23, 59, 59, 999));
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
     const logs = await prisma.nutritionLog.findMany({
       where: {
@@ -132,6 +178,8 @@ async function getNutritionLogs(req, res, next) {
 
 module.exports = {
   getDailyPlan,
+  generateWorkout,
+  generateMealPlan,
   chatAssistant,
   logNutrition,
   getNutritionLogs,

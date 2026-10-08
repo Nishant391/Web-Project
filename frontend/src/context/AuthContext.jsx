@@ -7,7 +7,7 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const { isLoaded, isSignedIn, user: clerkUser } = useUser();
   const { getToken } = useClerkAuth();
-  const [role, setRole] = useState('MEMBER');
+  const [role, setRole] = useState(() => localStorage.getItem('pulseforge_active_role') || 'ADMIN');
   const [dbUser, setDbUser] = useState(null);
   const [needsRoleSetup, setNeedsRoleSetup] = useState(false);
   const [clerkUserInfo, setClerkUserInfo] = useState(null); // for role selection page
@@ -41,11 +41,13 @@ export function AuthProvider({ children }) {
         setNeedsRoleSetup(false);
         setClerkUserInfo(null);
         setDbUser(res.data);
-        setRole(res.data.role || 'MEMBER');
+        const savedRole = localStorage.getItem('pulseforge_active_role');
+        const activeRole = savedRole || res.data.role || 'ADMIN';
+        setRole(activeRole);
+        localStorage.setItem('pulseforge_active_role', activeRole);
       }
     } catch (err) {
       console.warn('Backend profile sync failed:', err.message);
-      // Fallback: read role from Clerk public metadata if set
       if (clerkUser?.publicMetadata?.role) {
         setRole(String(clerkUser.publicMetadata.role).toUpperCase());
       }
@@ -60,6 +62,31 @@ export function AuthProvider({ children }) {
     }
   }, [isLoaded, isSignedIn, syncUserFromBackend]);
 
+  // Function to dynamically switch role at any time
+  const switchRole = async (targetRole) => {
+    try {
+      setLoading(true);
+      localStorage.setItem('pulseforge_active_role', targetRole);
+      setRole(targetRole);
+
+      const res = await authApi.switchRole(targetRole);
+      if (res.success && res.data) {
+        setRole(res.data.role);
+        setDbUser((prev) => ({ ...prev, ...res.data }));
+        localStorage.setItem('pulseforge_active_role', res.data.role);
+        return res.data;
+      }
+    } catch (err) {
+      console.error('Failed to switch role:', err);
+      try {
+        await syncUserFromBackend();
+      } catch (_) {}
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const currentUser = {
     id: dbUser?.id || clerkUser?.id || null,
     name: dbUser?.name || clerkUser?.fullName || clerkUser?.firstName || 'User',
@@ -72,6 +99,11 @@ export function AuthProvider({ children }) {
     trainer: dbUser?.trainer || null,
   };
 
+  const effectiveClerkInfo = clerkUserInfo || {
+    name: clerkUser?.fullName || clerkUser?.firstName || dbUser?.name || 'User',
+    email: clerkUser?.primaryEmailAddress?.emailAddress || dbUser?.email || '',
+  };
+
   const value = {
     role,
     user: currentUser,
@@ -80,8 +112,10 @@ export function AuthProvider({ children }) {
     isMember: role === 'MEMBER',
     dbProfile: dbUser,
     needsRoleSetup,
-    clerkUserInfo,
+    setNeedsRoleSetup,
+    clerkUserInfo: effectiveClerkInfo,
     syncUserFromBackend,
+    switchRole,
     loading,
   };
 

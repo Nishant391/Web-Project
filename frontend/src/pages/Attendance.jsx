@@ -18,6 +18,7 @@ import { Badge } from '../components/common/Badge';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { EmptyState } from '../components/common/EmptyState';
 import { Button } from '../components/ui/Button';
+import { LiveClock } from '../components/common/LiveClock';
 
 export default function Attendance() {
   const { isMember } = useAuth();
@@ -103,7 +104,9 @@ export default function Attendance() {
         title="Attendance Tracking & Turnstile"
         subtitle="Record daily check-ins, monitor active gym floor occupancy, and log checkout timestamps"
         icon={CalendarCheck2}
-      />
+      >
+        <LiveClock />
+      </PageHeader>
 
       {/* Floor Occupancy KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -136,14 +139,17 @@ export default function Attendance() {
       {/* Fast Check-In Terminal Card */}
       {!isMember && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-600">
-              <CheckCircle2 size={18} />
-            </span>
-            <div>
-              <h3 className="text-base font-bold text-ink">Turnstile Check-In Terminal</h3>
-              <p className="text-xs text-slate-500">Fast check-in for enrolled members</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-600">
+                <CheckCircle2 size={18} />
+              </span>
+              <div>
+                <h3 className="text-base font-bold text-ink">Turnstile Check-In Terminal</h3>
+                <p className="text-xs text-slate-500">Fast check-in for enrolled members</p>
+              </div>
             </div>
+            <LiveClock variant="terminal" className="w-full sm:w-auto" />
           </div>
 
           {feedbackMsg.text && (

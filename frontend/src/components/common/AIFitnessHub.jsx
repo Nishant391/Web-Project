@@ -16,6 +16,110 @@ import {
 import { aiApi } from '../../services/api';
 import { Button } from '../ui/Button';
 
+/**
+ * Lightweight markdown renderer for AI chat messages.
+ * Handles: **bold**, *italic*, _italic_, `code`, # headings, - bullets, numbered lists, blank-line paragraphs.
+ * Safe: does NOT use dangerouslySetInnerHTML.
+ */
+function MarkdownText({ text }) {
+  if (!text) return null;
+
+  // Split into paragraphs on blank lines
+  const paragraphs = text.split(/\n{2,}/);
+
+  function renderInline(str) {
+    // Tokenize inline bold/italic/code/underscore patterns
+    const parts = [];
+    const pattern = /(\*\*([^*]+)\*\*|\*([^*]+)\*|_([^_]+)_|`([^`]+)`)/g;
+    let last = 0;
+    let match;
+    while ((match = pattern.exec(str)) !== null) {
+      if (match.index > last) parts.push(str.slice(last, match.index));
+      if (match[2] !== undefined)
+        parts.push(<strong key={match.index} className="font-bold">{match[2]}</strong>);
+      else if (match[3] !== undefined)
+        parts.push(<em key={match.index}>{match[3]}</em>);
+      else if (match[4] !== undefined)
+        parts.push(<em key={match.index}>{match[4]}</em>);
+      else if (match[5] !== undefined)
+        parts.push(
+          <code key={match.index} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px] text-slate-700">
+            {match[5]}
+          </code>
+        );
+      last = match.index + match[0].length;
+    }
+    if (last < str.length) parts.push(str.slice(last));
+    return parts.length > 0 ? parts : str;
+  }
+
+  function renderParagraph(block, pIdx) {
+    const lines = block.split('\n');
+
+    // Heading detection (# or ##)
+    if (/^#{1,3}\s/.test(lines[0])) {
+      const headingText = lines[0].replace(/^#{1,3}\s*/, '');
+      return (
+        <p key={pIdx} className="font-bold text-ink mt-1">
+          {renderInline(headingText)}
+        </p>
+      );
+    }
+
+    // Bullet list detection — handles: "- text", "• text", "* text", "*   text" (qwen style)
+    const isBullet = (l) => /^[-•*]\s+\S/.test(l.trim());
+    const isNumbered = (l) => /^\d+[.)\s]/.test(l.trim());
+
+    if (lines.every((l) => isBullet(l) || l.trim() === '')) {
+      return (
+        <ul key={pIdx} className="list-none space-y-0.5 pl-1">
+          {lines
+            .filter((l) => l.trim())
+            .map((l, i) => (
+              <li key={i} className="flex gap-1.5">
+                <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-purple-500" />
+                <span>{renderInline(l.trim().replace(/^[-•*]\s+/, ''))}</span>
+              </li>
+            ))}
+        </ul>
+      );
+    }
+
+    if (lines.every((l) => isNumbered(l) || l.trim() === '')) {
+      return (
+        <ol key={pIdx} className="list-none space-y-0.5 pl-1">
+          {lines
+            .filter((l) => l.trim())
+            .map((l, i) => (
+              <li key={i} className="flex gap-1.5">
+                <span className="shrink-0 font-bold text-purple-600">{i + 1}.</span>
+                <span>{renderInline(l.replace(/^\d+[.)\s]+/, ''))}</span>
+              </li>
+            ))}
+        </ol>
+      );
+    }
+
+    // Mixed / plain paragraph — join lines with spaces but keep intended line breaks
+    return (
+      <p key={pIdx} className="leading-relaxed">
+        {lines.map((line, i) => (
+          <React.Fragment key={i}>
+            {renderInline(line)}
+            {i < lines.length - 1 && <br />}
+          </React.Fragment>
+        ))}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5 text-xs">
+      {paragraphs.map((block, idx) => renderParagraph(block.trim(), idx))}
+    </div>
+  );
+}
+
 export function AIFitnessHub({ memberGoal = 'Strength & Hypertrophy', initialFitnessLevel = 'Intermediate' }) {
   const [activeTab, setActiveTab] = useState('PLAN'); // 'PLAN' | 'MEALS' | 'CALORIES' | 'WORKOUT' | 'INSIGHTS' | 'ASSISTANT'
   const [aiData, setAiData] = useState(null);
@@ -509,13 +613,17 @@ export function AIFitnessHub({ memberGoal = 'Strength & Hypertrophy', initialFit
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed whitespace-pre-line ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
                     msg.role === 'user'
                       ? 'bg-purple-600 text-white shadow-xs'
                       : 'bg-white border border-slate-200 text-slate-800 shadow-soft'
                   }`}
                 >
-                  <p>{msg.content}</p>
+                  {msg.role === 'user' ? (
+                    <p className="whitespace-pre-line">{msg.content}</p>
+                  ) : (
+                    <MarkdownText text={msg.content} />
+                  )}
                 </div>
               </div>
             ))}

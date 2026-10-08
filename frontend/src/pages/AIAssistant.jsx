@@ -18,6 +18,22 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { Button } from '../components/ui/Button';
 
+function stripHtmlTags(text) {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<p>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .trim();
+}
+
 export default function AIAssistant() {
   const [activeTab, setActiveTab] = useState('workout'); // 'workout' | 'meal' | 'chat'
 
@@ -108,9 +124,10 @@ export default function AIAssistant() {
       });
 
       if (res.success) {
+        const text = res.data.answer || res.data.reply || '';
         setChatMessages([
           ...updatedHistory,
-          { role: 'assistant', content: res.data.answer, source: res.data.source },
+          { role: 'assistant', content: text, source: res.data.source || 'Groq AI' },
         ]);
       }
     } catch (err) {
@@ -127,7 +144,7 @@ export default function AIAssistant() {
   };
 
   const copyToClipboard = (text, idx) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(stripHtmlTags(text));
     setCopiedIndex(idx);
     setTimeout(() => setCopiedIndex(null), 2000);
   };
@@ -326,7 +343,7 @@ export default function AIAssistant() {
                 </div>
 
                 <div className="prose prose-slate max-w-none text-xs sm:text-sm leading-relaxed max-h-[500px] overflow-y-auto whitespace-pre-wrap font-sans text-slate-800">
-                  {workoutResult.plan}
+                  {stripHtmlTags(workoutResult.plan)}
                 </div>
               </div>
             ) : (
@@ -471,7 +488,7 @@ export default function AIAssistant() {
                 </div>
 
                 <div className="prose prose-slate max-w-none text-xs sm:text-sm leading-relaxed max-h-[500px] overflow-y-auto whitespace-pre-wrap font-sans text-slate-800">
-                  {mealResult.plan}
+                  {stripHtmlTags(mealResult.plan)}
                 </div>
               </div>
             ) : (
@@ -551,7 +568,7 @@ export default function AIAssistant() {
                         : 'bg-slate-100/80 text-slate-800 rounded-bl-none border border-slate-200/60'
                     }`}
                   >
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                    <div className="whitespace-pre-wrap">{stripHtmlTags(msg.content)}</div>
                     {msg.source && (
                       <p className="mt-2 text-[10px] font-semibold text-slate-400">
                         Response generated via {msg.source}

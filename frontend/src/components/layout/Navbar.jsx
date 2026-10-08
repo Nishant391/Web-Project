@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Dumbbell,
   ShieldCheck,
@@ -9,15 +9,34 @@ import {
   X,
   ArrowRight,
   Sparkles,
+  ChevronDown,
+  Check,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../ui/Button';
 import { UserButton, SignInButton, SignedIn, SignedOut } from '@clerk/clerk-react';
+import { LiveClock } from '../common/LiveClock';
 
 export function Navbar() {
-  const { role, user } = useAuth();
+  const { role, user, switchRole } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const roleMenuRef = useRef(null);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(event.target)) {
+        setRoleMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const isDashboard =
     location.pathname.startsWith('/dashboard') ||
@@ -38,25 +57,41 @@ export function Navbar() {
         return {
           icon: ShieldCheck,
           label: 'Admin',
-          badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+          badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200',
         };
       case 'TRAINER':
         return {
           icon: UserCheck,
           label: 'Trainer',
-          badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+          badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200',
         };
       default:
         return {
           icon: User,
           label: 'Member',
-          badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
+          badgeClass: 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200',
         };
     }
   };
 
   const currentRoleConfig = getRoleConfig(role);
   const RoleIcon = currentRoleConfig.icon;
+
+  const handleRoleSelect = async (targetRole) => {
+    if (targetRole === role || switching) {
+      setRoleMenuOpen(false);
+      return;
+    }
+    try {
+      setSwitching(true);
+      await switchRole(targetRole);
+      setRoleMenuOpen(false);
+    } catch (err) {
+      alert(`Could not switch role: ${err.message}`);
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
@@ -85,15 +120,104 @@ export function Navbar() {
 
         {/* Right-side controls */}
         <div className="flex items-center gap-3">
+          {/* Live Ongoing Real-Time Clock */}
+          <LiveClock />
 
-          {/* Read-only role badge (only shown when signed in) */}
+          {/* Interactive Role Switcher Dropdown (when signed in) */}
           <SignedIn>
-            <div
-              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-semibold shadow-sm ${currentRoleConfig.badgeClass}`}
-              title={`You are signed in as ${currentRoleConfig.label}`}
-            >
-              <RoleIcon size={14} className="shrink-0" />
-              <span>{currentRoleConfig.label}</span>
+            <div className="relative" ref={roleMenuRef}>
+              <button
+                type="button"
+                onClick={() => setRoleMenuOpen(!roleMenuOpen)}
+                disabled={switching}
+                className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm transition-all cursor-pointer ${currentRoleConfig.badgeClass}`}
+                title="Click to switch your active role (Admin / Trainer / Member)"
+              >
+                {switching ? (
+                  <Loader2 size={14} className="animate-spin text-slate-600" />
+                ) : (
+                  <RoleIcon size={14} className="shrink-0" />
+                )}
+                <span>Role: {currentRoleConfig.label}</span>
+                <ChevronDown size={12} className={`transition-transform ${roleMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {roleMenuOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-2.5 py-1.5 border-b border-slate-100 mb-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Switch Active Role
+                    </p>
+                    <p className="text-xs text-slate-600 font-medium truncate">
+                      {user?.email || 'Logged in user'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    {/* Admin */}
+                    <button
+                      type="button"
+                      onClick={() => handleRoleSelect('ADMIN')}
+                      className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                        role === 'ADMIN'
+                          ? 'bg-indigo-50 text-indigo-900 border border-indigo-200'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <ShieldCheck size={16} className="text-indigo-600" />
+                        Admin (Full Control)
+                      </span>
+                      {role === 'ADMIN' && <Check size={14} className="text-indigo-600" />}
+                    </button>
+
+                    {/* Trainer */}
+                    <button
+                      type="button"
+                      onClick={() => handleRoleSelect('TRAINER')}
+                      className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                        role === 'TRAINER'
+                          ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <UserCheck size={16} className="text-emerald-600" />
+                        Trainer (Coach)
+                      </span>
+                      {role === 'TRAINER' && <Check size={14} className="text-emerald-600" />}
+                    </button>
+
+                    {/* Member */}
+                    <button
+                      type="button"
+                      onClick={() => handleRoleSelect('MEMBER')}
+                      className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                        role === 'MEMBER'
+                          ? 'bg-blue-50 text-blue-900 border border-blue-200'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <User size={16} className="text-blue-600" />
+                        Member (Athlete)
+                      </span>
+                      {role === 'MEMBER' && <Check size={14} className="text-blue-600" />}
+                    </button>
+                  </div>
+
+                  <div className="border-t border-slate-100 mt-1.5 pt-1.5">
+                    <Link
+                      to="/setup-role"
+                      onClick={() => setRoleMenuOpen(false)}
+                      className="flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-brand-700 hover:bg-brand-50 transition w-full"
+                    >
+                      Full Role Selection Screen →
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
           </SignedIn>
 
@@ -153,6 +277,13 @@ export function Navbar() {
               className="flex items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               Operations Dashboard <ArrowRight size={16} />
+            </Link>
+            <Link
+              to="/setup-role"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50"
+            >
+              Change Role (Admin / Trainer / Member) <ShieldCheck size={16} />
             </Link>
             <Link
               to="/ai-assistant"
